@@ -1,183 +1,131 @@
 var ActionListener = function(){
-	var actions = [];
+	var actions = [], allPages = [], activePages = [], keywords = [],
+	previousState = {windowId: null, tabId: null, tabPosition: null, pageId: null},
+	timeout,
+	prevActionTime = null,
+	minGap = 200;
 	
-	saveAction = function(action){
+	var isOutTimegap = function(actionTime){
+		return (!prevActionTime || actionTime-prevActionTime > minGap);
+	}
+	
+	var getSubdomain = function(url){
+		var domain, parts, partsLength;
+		return domain = url.split("//")[1].split("/")[0].split(":")[0];
+	}
+	
+	var getPageId = function(pageUrl, prevPageId){
+		var i = allPages.length-1;
+		while(i>=0 && allPages[i].url != pageUrl) i--;
+		
+		if(i >= 0) return i;
+		
+		var page = {
+			url: pageUrl,
+			domain: "",
+			subdomain: getSubdomain(pageUrl),
+			keywords: {},
+			sourceId: prevPageId
+		}
+		allPages.push(page);
+		return allPages.length-1;
+	}
+	
+	var saveAction = function(action){
 		actions.push(action);
-		console.log("cathed: "+action);
-		patternControl.control(action);
-		if(actions.length > 200){
+
+		console.log(action.name);
+
+		patternControl.control(action,allPages[action.pageId],allPages[action.prevPageId]);		
+		if(actions.length > 10){
 			//connection.send();
 			actions.length = 0;
+			allPages.length = 0;
 		}
 	}
 	
+	var createAction = function(name, windowId, tabId, actionInfo){
+		
+		var action = {
+			name: name,
+			sessionId: user.getSession(),
+			time: + new Date(),
+			windowId: windowId,
+			prev_windowId: null,
+			tabId: tabId,
+			prev_tabId: null,
+			tabPosition: null,
+			prev_tabPosition: null,
+			pageId: null,
+			prev_pageId: null			
+		}
+		var pageUrl = null;
+		
+		if(name != "tabRemoved")
+		chrome.tabs.get(tabId, function(tab){
+			action.tabPosition = tab.index;
+			action.pageId = getPageId(tab.url, previousState.pageId);
+
+			for(key in previousState){
+				action["prev_"+key] = previousState[key];
+				previousState[key] = action[key];
+			}		
+			
+			//Tag: id, názov, počet výskytov pre stránku, čas posledného výskytu, čas strávený na stránkach s tagom
+			saveAction(action);
+		});
+		else
+			saveAction(action);
+	}
+	
 	ActionListener.prototype.start = function(){
+
+		
 		//akcie s oknami
-		chrome.windows.onCreated.addListener(function(window){
-			return saveAction({
-				name: "windowCreated",
-				session_ID: user.getSession(),
-				chrome_session: window.sessionid,
-				time: + new Date(),
-				window_ID: window.id,
-				prev_window_ID: "treba získať",
-				tab_ID: "",
-				prev_tab_ID: "treba zistiť",
-				page_ID: "treba vytvoriť štruktúru",
-				prev_page_ID: "treba zistiť"
-			});
-		});
-		chrome.windows.onRemoved.addListener(function(window){
-			return saveAction({
-				name: "windowRemoved",
-				session_ID: user.getSession(),
-				chrome_session: window.sessionid,
-				time: + new Date(),
-				window_ID: window.id,
-				prev_window_ID: "treba získať",
-				tab_ID: "",
-				prev_tab_ID: "treba zistiť",
-				page_ID: "treba vytvoriť štruktúru",
-				prev_page_ID: "treba zistiť"
-			});
-		});
-		chrome.windows.onFocusChanged.addListener(function(windowid){ //keďže vracia integer a nie objekt musím prerobiť
-			if(windowid != -1){
-				chrome.windows.get(windowid, function(window){
-					return saveAction({
-						name: "windowFocused",
-						session_ID: user.getSession(),
-						chrome_session: "",  //window.sessionid je undeffined??
-						time: + new Date(),
-						window_ID: windowid,
-						prev_window_ID: "treba získať",
-						tab_ID: "",
-						prev_tab_ID: "treba zistiť",
-						page_ID: "treba vytvoriť štruktúru",
-						prev_page_ID: "treba zistiť"
+		chrome.windows.onFocusChanged.addListener(function(windowId){
+			if(windowId != chrome.windows.WINDOW_ID_NONE)
+				chrome.windows.get(windowId, function(window){
+					chrome.tabs.query({active: true, windowId: window.id}, function(tabs) {
+						if(tabs.length > 0)
+							createAction("windowActivated",tabs[0].windowId,tabs[0].id, null);							
 					});
 				});			
-			}
-			else{
-				console.log("používateľ mimo chromu");
-			}
 		}); 
-		
+				
 		//akcie s kartami
 		//vytvorenie tabu
 		chrome.tabs.onCreated.addListener(function(tab){
-			return saveAction({
-				name: "tabCreated",
-				session_ID: user.getSession(),
-				chrome_session: tab.sessionid,
-				time: + new Date(),
-				window_ID: tab.windowid,
-				prev_window_ID: "treba získať",
-				tab_ID: tab.id,
-				prev_tab_ID: "treba zistiť",
-				page_ID: "treba vytvoriť štruktúru",
-				prev_page_ID: "treba zistiť"
-			});
+			createAction("tabCreated",tab.windowId, tab.id, null);
 		}); 
-		//zmena stránky tabu
-		chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab){
-			return saveAction({
-				name: "tabUpdated",
-				session_ID: user.getSession(),
-				chrome_session: tab.sessionid,
-				time: + new Date(),
-				window_ID: tab.windowid,
-				prev_window_ID: "treba získať",
-				tab_ID: tabid,
-				prev_tab_ID: "treba zistiť",
-				page_ID: "treba vytvoriť štruktúru",
-				prev_page_ID: "treba zistiť"
-			});
-		}); 
+		
 		//presun tabu v okne
 		chrome.tabs.onMoved.addListener(function(tabId, moveInfo){
-			chrome.tabs.get(tabId, function(tab){
-				return saveAction({
-					name: "tabMoved",
-					session_ID: user.getSession(),
-					chrome_session: tab.sessionid,
-					time: + new Date(),
-					window_ID: tab.windowid,
-					prev_window_ID: "treba získať",
-					tab_ID: tab.id,
-					prev_tab_ID: "treba zistiť",
-					page_ID: "treba vytvoriť štruktúru",
-					prev_page_ID: "treba zistiť"
-				});
-			});
+			createAction("tabMoved",moveInfo.windowId, tabId, moveInfo);
 		});
 		//aktivácia tabu
 		chrome.tabs.onActivated.addListener(function(activeInfo){
 			chrome.tabs.get(activeInfo.tabId, function(tab){
-				return saveAction({
-					name: "tabActivated",
-					session_ID: user.getSession(),
-					chrome_session: tab.sessionid,
-					time: + new Date(),
-					window_ID: tab.windowid,
-					prev_window_ID: "treba získať",
-					tab_ID: tab.id,
-					prev_tab_ID: "treba zistiť",
-					page_ID: "treba vytvoriť štruktúru",
-					prev_page_ID: "treba zistiť"
-				});
-			});
-		});	
-		//oddelenie tabu od okna
-		chrome.tabs.onDetached.addListener(function(tabId, detachInfo){
-			chrome.tabs.get(tabId, function(tab){
-				return saveAction({
-					name: "tabDetached",
-					session_ID: user.getSession(),
-					chrome_session: tab.sessionid,
-					time: + new Date(),
-					window_ID: tab.windowid,
-					prev_window_ID: detachInfo.oldWindowId,
-					tab_ID: tab.id,
-					prev_tab_ID: null,
-					page_ID: null,
-					prev_page_ID: null
-				});
+				if(typeof tab !== "undefined"){
+					createAction("tabActivated",tab.windowId, tab.id, activeInfo);
+				}
 			});
 		});	
 		//pripojenie tabu k oknu
 		chrome.tabs.onAttached.addListener(function(tabId, attachInfo){
 			chrome.tabs.get(tabId, function(tab){
-				return saveAction({
-					name: "tabDetached",
-					session_ID: user.getSession(),
-					chrome_session: tab.sessionid,
-					time: + new Date(),
-					window_ID: attachInfo.newWindowId,
-					prev_window_ID: "zistiť",
-					tab_ID: tab.id,
-					prev_tab_ID: null,
-					page_ID: null,
-					prev_page_ID: null
-				});
+				createAction("tabAttached",tab.windowId, tab.id, attachInfo);
 			});
 		});	
 		//zatvorenie tabu
 		chrome.tabs.onRemoved.addListener(function(tabId, removeInfo){
-			chrome.tabs.get(tabId, function(tab){
-				return saveAction({
-					name: "tabDetached",
-					session_ID: user.getSession(),
-					chrome_session: tab.sessionid,
-					time: + new Date(),
-					window_ID: null,
-					prev_window_ID: removeInfo.WindowId,
-					tab_ID: tab.id,
-					prev_tab_ID: null,
-					page_ID: null,
-					prev_page_ID: null
-				});
-			});
+			if(!removeInfo.isWindowClosing)
+				createAction("tabRemoved",removeInfo.windowId, tabId, removeInfo);
 		});	
+		//zmena stránky tabu
+		chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab){
+			if(changeInfo.status == "complete"){
+				createAction("tabUpdated",tab.windowId, tabId, changeInfo);
+			}
+		}); 
 	}
 }

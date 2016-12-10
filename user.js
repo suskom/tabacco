@@ -2,11 +2,11 @@ var User = function(){
 
 	var user_id = "";
 	var user_name = "";
-	var user_session;
+	var user_session;  //upraviť na tvar "chrome_session-user_session" 
 
 	User.prototype.getInfo = function(callback) {
 		if(user_id.length > 0){
-			return callback(user_id, user_name, user_session);			
+			callback(user_id, user_name, user_session);			
 		}
 		else{
 			chrome.storage.sync.get(["user_id","user_name","user_session"], function(result) {
@@ -14,7 +14,7 @@ var User = function(){
 					user_id = result.user_id;
 					user_name = result.user_name;
 					user_session = 1;
-					return callback(result.user_id,result.user_name,result.user_session);
+					callback(result.user_id,result.user_name,result.user_session);
 				} else {
 					new_id = "sifhmsdsuirghsmgss"; //pridať hash mailu
 					new_name = "name";
@@ -24,7 +24,7 @@ var User = function(){
 						"user_name": new_name,
 						"user_session": new_session
 					}, function() {
-						return callback(new_id, new_name, new_session);
+						callback(new_id, new_name, new_session);
 					});
 				}
 			});

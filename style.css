@@ -8,6 +8,11 @@ body {
 	text-align: center;
 }
 
+#notification{
+	width: 100%;
+}
+
+
 .logo{
 	padding: 5px;
 }

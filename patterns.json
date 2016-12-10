@@ -1,0 +1,36 @@
+{
+	"patterns" [
+		{
+			"pattern": "closingSource",
+			"states": [
+				{
+					"index": 0,
+					"resetState": 0,
+					"edges":[
+						{
+							"rewrite": [],
+							"toState": 1,
+							"equals": {
+						
+							}
+						}
+					]
+				},
+				{
+					"index": 1,
+					"resetState": 0,
+					"edges":[
+						{
+							"rewrite": [],
+							"toState": "R1",
+							"equals": []
+						}
+					]
+				}
+			],
+			"reactions": {
+				"R1":  
+			}
+		}
+	]
+}
